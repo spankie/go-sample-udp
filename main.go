@@ -16,7 +16,7 @@ import (
 var (
 	isServer = flag.Bool("server", false, "whether it should be run as a server")
 	port     = flag.Uint("port", 8081, "port to send to or receive from")
-	host     = flag.String("host", "127.0.0.1", "address to send to or receive from")
+	host     = flag.String("host", "0.0.0.0", "address to send to or receive from")
 	timeout  = flag.Duration("timeout", 15*time.Second, "read and write blocking deadlines")
 	input    = flag.String("input", "-", "file with contents to send over udp")
 )
