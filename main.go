@@ -14,7 +14,7 @@ import (
 
 var (
 	isServer = flag.Bool("server", false, "whether it should be run as a server")
-	port     = flag.Uint("port", 1337, "port to send to or receive from")
+	port     = flag.Uint("port", 8081, "port to send to or receive from")
 	host     = flag.String("host", "127.0.0.1", "address to send to or receive from")
 	timeout  = flag.Duration("timeout", 15*time.Second, "read and write blocking deadlines")
 	input    = flag.String("input", "-", "file with contents to send over udp")
@@ -68,8 +68,8 @@ func server(ctx context.Context, address string) (err error) {
 				return
 			}
 
-			fmt.Printf("packet-received: bytes=%d from=%s\n",
-				n, addr.String())
+			fmt.Printf("packet-received: bytes=%d from=%s message:%s\n",
+				n, addr.String(), string(buffer))
 
 			// Setting a deadline for the `write` operation allows us to not block
 			// for longer than a specific timeout.
@@ -78,21 +78,21 @@ func server(ctx context.Context, address string) (err error) {
 			// queue to be freed enough so that we are able to proceed.
 			//
 			// TODO: try to simulate a scenario where we can see this failing.
-			deadline := time.Now().Add(*timeout)
-			err = pc.SetWriteDeadline(deadline)
-			if err != nil {
-				doneChan <- err
-				return
-			}
+			// deadline := time.Now().Add(*timeout)
+			// err = pc.SetWriteDeadline(deadline)
+			// if err != nil {
+			// 	doneChan <- err
+			// 	return
+			// }
 
 			// Write the packet's contents back to the client.
-			n, err = pc.WriteTo(buffer[:n], addr)
-			if err != nil {
-				doneChan <- err
-				return
-			}
+			// n, err = pc.WriteTo(buffer[:n], addr)
+			// if err != nil {
+			// 	doneChan <- err
+			// 	return
+			// }
 
-			fmt.Printf("packet-written: bytes=%d to=%s\n", n, addr.String())
+			// fmt.Printf("packet-written: bytes=%d to=%s\n", n, addr.String())
 		}
 	}()
 
