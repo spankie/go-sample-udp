@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -47,7 +48,10 @@ func server(ctx context.Context, address string) (err error) {
 
 	doneChan := make(chan error, 1)
 	buffer := make([]byte, maxBufferSize)
-
+	f, err := os.OpenFile("./dat1.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("error opening file: %s", err)
+	}
 	// Given that waiting for packets to arrive is blocking by nature and we want
 	// to be able of cancelling such action if desired, we do that in a separate
 	// go routine.
@@ -70,6 +74,9 @@ func server(ctx context.Context, address string) (err error) {
 
 			fmt.Printf("packet-received: bytes=%d from=%s message:%s\n",
 				n, addr.String(), string(buffer))
+
+			// write the message to log file
+			f.Write(buffer[:n])
 
 			// Setting a deadline for the `write` operation allows us to not block
 			// for longer than a specific timeout.
@@ -99,6 +106,7 @@ func server(ctx context.Context, address string) (err error) {
 	select {
 	case <-ctx.Done():
 		fmt.Println("cancelled")
+		f.Close()
 		err = ctx.Err()
 	case err = <-doneChan:
 	}
