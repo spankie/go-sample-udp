@@ -48,7 +48,7 @@ func server(ctx context.Context, address string) (err error) {
 
 	doneChan := make(chan error, 1)
 	buffer := make([]byte, maxBufferSize)
-	f, err := os.OpenFile("./dat1.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("./messages.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("error opening file: %s", err)
 	}
