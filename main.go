@@ -71,12 +71,12 @@ func server(ctx context.Context, address string) (err error) {
 				doneChan <- err
 				return
 			}
-
+			data := buffer[:n]
 			fmt.Printf("packet-received: bytes=%d from=%s message:%s\n",
-				n, addr.String(), string(buffer))
+				n, addr.String(), string(data))
 
 			// write the message to log file
-			f.Write(buffer[:n])
+			f.Write(data)
 
 			// Setting a deadline for the `write` operation allows us to not block
 			// for longer than a specific timeout.
