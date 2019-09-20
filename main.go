@@ -103,7 +103,7 @@ func server(ctx context.Context, address string) (err error) {
 			// addrLenInt := binary.BigEndian.Uint16(addressLength)                                      // convert the address lenght to integer
 			b.WriteString(fmt.Sprintf("packet-received: bytes=%d from=%s message:%s\n",
 				n, addr.String(), string(themessage)))
-			fmt.Println(b)
+			fmt.Println(b.String())
 			// write the message to log file
 			f.Write([]byte(b.String()))
 
