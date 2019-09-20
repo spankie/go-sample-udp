@@ -2,20 +2,23 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
 
 var (
 	isServer = flag.Bool("server", false, "whether it should be run as a server")
-	port     = flag.Uint("port", 1337, "port to send to or receive from")
-	host     = flag.String("host", "127.0.0.1", "address to send to or receive from")
+	port     = flag.Uint("port", 8081, "port to send to or receive from")
+	host     = flag.String("host", "0.0.0.0", "address to send to or receive from")
 	timeout  = flag.Duration("timeout", 15*time.Second, "read and write blocking deadlines")
 	input    = flag.String("input", "-", "file with contents to send over udp")
 )
@@ -41,13 +44,17 @@ func server(ctx context.Context, address string) (err error) {
 		return
 	}
 
+	// addr := pc.LocalAddr()
 	// `Close`ing the packet "connection" means cleaning the data structures
 	// allocated for holding information about the listening socket.
 	defer pc.Close()
 
 	doneChan := make(chan error, 1)
 	buffer := make([]byte, maxBufferSize)
-
+	f, err := os.OpenFile("./messages.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("error opening file: %s", err)
+	}
 	// Given that waiting for packets to arrive is blocking by nature and we want
 	// to be able of cancelling such action if desired, we do that in a separate
 	// go routine.
@@ -67,9 +74,38 @@ func server(ctx context.Context, address string) (err error) {
 				doneChan <- err
 				return
 			}
+			data := buffer[:n]
 
-			fmt.Printf("packet-received: bytes=%d from=%s\n",
-				n, addr.String())
+			protocolSignature := data[:12]
+			protocalVersion := data[12]                // first 4 bits = version; second four bits = command (0 = LOCAL, 1 = PROXY)
+			transportProtocolAddressFamily := data[13] // The highest 4 bits contain the address family, the lowest 4 bits contain the protocol.
+			addressLength := data[14:16]               // address length in bytes in network endian order
+			protocolheaderlenght := 16 + binary.BigEndian.Uint16(addressLength)
+			// protocolheader := data[:protocolheaderlenght]
+			themessage := data[protocolheaderlenght:]
+			var b strings.Builder
+			b.WriteString(fmt.Sprintln("lenght of data: ", len(data[:0x54])))
+			b.WriteString(fmt.Sprintf("Protocol Signature: %#v\n", protocolSignature))
+			b.WriteString(fmt.Sprintf("Protocol Version: %#v\n", protocalVersion))
+			b.WriteString(fmt.Sprintf("Transport Protocol/Address family: %#v\n", transportProtocolAddressFamily))
+			b.WriteString(fmt.Sprintf("Address lenght: %#v\n", addressLength))
+
+			sourceLayerAddr := net.IP(data[16:20]) // 197.210.29.2
+			dstLayerAddr := net.IP(data[20:24])
+			slaPort := data[24:26]
+			dlaPort := data[26:28]
+
+			// b.WriteString(fmt.SPrintln())
+			b.WriteString(fmt.Sprintf("sourceLayerAddr: %v\n", sourceLayerAddr))
+			b.WriteString(fmt.Sprintf("dstLayerAddr: %v\n", dstLayerAddr))
+			b.WriteString(fmt.Sprintf("slaPort(int): %v\nslaPort: %#v\n", binary.BigEndian.Uint16(slaPort), slaPort)) // convert to integer)
+			b.WriteString(fmt.Sprintf("dlaPort(int): %v\ndlaPort: %#v\n", binary.BigEndian.Uint16(dlaPort), dlaPort)) // convert to integer)
+			// addrLenInt := binary.BigEndian.Uint16(addressLength)                                      // convert the address lenght to integer
+			b.WriteString(fmt.Sprintf("packet-received: bytes=%d from=%s message:%s\n",
+				n, addr.String(), string(themessage)))
+			fmt.Println(b.String())
+			// write the message to log file
+			f.Write([]byte(b.String()))
 
 			// Setting a deadline for the `write` operation allows us to not block
 			// for longer than a specific timeout.
@@ -78,27 +114,28 @@ func server(ctx context.Context, address string) (err error) {
 			// queue to be freed enough so that we are able to proceed.
 			//
 			// TODO: try to simulate a scenario where we can see this failing.
-			deadline := time.Now().Add(*timeout)
-			err = pc.SetWriteDeadline(deadline)
-			if err != nil {
-				doneChan <- err
-				return
-			}
+			// deadline := time.Now().Add(*timeout)
+			// err = pc.SetWriteDeadline(deadline)
+			// if err != nil {
+			// 	doneChan <- err
+			// 	return
+			// }
 
 			// Write the packet's contents back to the client.
-			n, err = pc.WriteTo(buffer[:n], addr)
-			if err != nil {
-				doneChan <- err
-				return
-			}
+			// n, err = pc.WriteTo(buffer[:n], addr)
+			// if err != nil {
+			// 	doneChan <- err
+			// 	return
+			// }
 
-			fmt.Printf("packet-written: bytes=%d to=%s\n", n, addr.String())
+			// fmt.Printf("packet-written: bytes=%d to=%s\n", n, addr.String())
 		}
 	}()
 
 	select {
 	case <-ctx.Done():
 		fmt.Println("cancelled")
+		f.Close()
 		err = ctx.Err()
 	case err = <-doneChan:
 	}
