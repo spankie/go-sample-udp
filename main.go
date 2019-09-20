@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ func server(ctx context.Context, address string) (err error) {
 		return
 	}
 
+	// addr := pc.LocalAddr()
 	// `Close`ing the packet "connection" means cleaning the data structures
 	// allocated for holding information about the listening socket.
 	defer pc.Close()
@@ -72,9 +74,35 @@ func server(ctx context.Context, address string) (err error) {
 				return
 			}
 			data := buffer[:n]
-			fmt.Printf("packet-received: bytes=%d from=%s message:%s\n",
-				n, addr.String(), string(data))
 
+			protocolSignature := data[:12]
+			protocalVersion := data[12]                // first 4 bits = version; second four bits = command (0 = LOCAL, 1 = PROXY)
+			transportProtocolAddressFamily := data[13] // The highest 4 bits contain the address family, the lowest 4 bits contain the protocol.
+			addressLength := data[14:16]               // address length in bytes in network endian order
+			// protocolheaderlenght = 16 + addressLength
+			// protocolheader = data[:protocolheaderlenght]
+			// themessage = data[protocolheaderlenght:]
+
+			fmt.Println("lenght of data: ", len(data[:0x54]))
+			fmt.Printf("Protocol Signature: %#v\n", protocolSignature)
+			fmt.Printf("Protocol Version: %#v\n", protocalVersion)
+			fmt.Printf("Transport Protocol/Address family: %#v\n", transportProtocolAddressFamily)
+			fmt.Printf("Address lenght: %#v\n", addressLength)
+
+			sourceLayerAddr := net.IP(data[16:20]) // 197.210.29.2
+			dstLayerAddr := net.IP(data[20:24])
+			slaPort := data[24:26]
+			dlaPort := data[26:28]
+
+			fmt.Println()
+			fmt.Printf("sourceLayerAddr: %v\n", sourceLayerAddr)
+			fmt.Printf("dstLayerAddr: %v\n", dstLayerAddr)
+			fmt.Printf("slaPort(int): %v\nslaPort: %#v\n", binary.BigEndian.Uint16(slaPort), slaPort) // convert to integer
+			fmt.Printf("dlaPort(int): %v\ndlaPort: %#v\n", binary.BigEndian.Uint16(dlaPort), dlaPort) // convert to integer
+			addrLenInt := binary.BigEndian.Uint16(addressLength)                                      // convert the address lenght to integer
+			fmt.Printf("packet-received: bytes=%d from=%s message:%s\n",
+				n, addr.String(), string(data[:addrLenInt]))
+			// fmt.Println(data)
 			// write the message to log file
 			f.Write(data)
 
