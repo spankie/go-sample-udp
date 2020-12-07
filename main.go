@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -69,66 +68,26 @@ func server(ctx context.Context, address string) (err error) {
 			// note.: `buffer` is not being reset between runs.
 			//	  It's expected that only `n` reads are read from it whenever
 			//	  inspecting its contents.
-			n, addr, err := pc.ReadFrom(buffer)
+			size, addr, err := pc.ReadFrom(buffer)
 			if err != nil {
 				doneChan <- err
 				return
 			}
-			data := buffer[:n]
+			decodedPacket := DecodePacket(size, buffer)
 
-			protocolSignature := data[:12]
-			protocalVersion := data[12]                // first 4 bits = version; second four bits = command (0 = LOCAL, 1 = PROXY)
-			transportProtocolAddressFamily := data[13] // The highest 4 bits contain the address family, the lowest 4 bits contain the protocol.
-			addressLength := data[14:16]               // address length in bytes in network endian order
-			protocolheaderlenght := 16 + binary.BigEndian.Uint16(addressLength)
-			// protocolheader := data[:protocolheaderlenght]
-			themessage := data[protocolheaderlenght:]
 			var b strings.Builder
-			b.WriteString(fmt.Sprintln("lenght of data: ", len(data[:0x54])))
-			b.WriteString(fmt.Sprintf("Protocol Signature: %#v\n", protocolSignature))
-			b.WriteString(fmt.Sprintf("Protocol Version: %#v\n", protocalVersion))
-			b.WriteString(fmt.Sprintf("Transport Protocol/Address family: %#v\n", transportProtocolAddressFamily))
-			b.WriteString(fmt.Sprintf("Address lenght: %#v\n", addressLength))
-
-			sourceLayerAddr := net.IP(data[16:20]) // 197.210.29.2
-			dstLayerAddr := net.IP(data[20:24])
-			slaPort := data[24:26]
-			dlaPort := data[26:28]
-
-			// b.WriteString(fmt.SPrintln())
-			b.WriteString(fmt.Sprintf("sourceLayerAddr: %v\n", sourceLayerAddr))
-			b.WriteString(fmt.Sprintf("dstLayerAddr: %v\n", dstLayerAddr))
-			b.WriteString(fmt.Sprintf("slaPort(int): %v\nslaPort: %#v\n", binary.BigEndian.Uint16(slaPort), slaPort)) // convert to integer)
-			b.WriteString(fmt.Sprintf("dlaPort(int): %v\ndlaPort: %#v\n", binary.BigEndian.Uint16(dlaPort), dlaPort)) // convert to integer)
-			// addrLenInt := binary.BigEndian.Uint16(addressLength)                                      // convert the address lenght to integer
+			b.WriteString(fmt.Sprintf("Protocol Signature: %#v\n", decodedPacket.ProtocolSignature))
+			b.WriteString(fmt.Sprintf("Protocol Version: %#v\n", decodedPacket.ProtocolVersion))
+			b.WriteString(fmt.Sprintf("Transport Protocol/Address family: %#v\n", decodedPacket.TransportProtocolAddressFamily))
+			b.WriteString(fmt.Sprintf("sourceLayerAddr: %v\n", decodedPacket.SourceLayerAddr))
+			b.WriteString(fmt.Sprintf("dstLayerAddr: %v\n", decodedPacket.DestinationLayerAddr))
+			b.WriteString(fmt.Sprintf("slaPort: %v\n", decodedPacket.SourceLayerPort))
+			b.WriteString(fmt.Sprintf("dlaPort: %v\n", decodedPacket.DestinationLayerPort))
 			b.WriteString(fmt.Sprintf("packet-received: bytes=%d from=%s message:%s\n",
-				n, addr.String(), string(themessage)))
+				size, addr.String(), string(decodedPacket.Message)))
 			fmt.Println(b.String())
 			// write the message to log file
 			f.Write([]byte(b.String()))
-
-			// Setting a deadline for the `write` operation allows us to not block
-			// for longer than a specific timeout.
-			//
-			// In the case of a write operation, that'd mean waiting for the send
-			// queue to be freed enough so that we are able to proceed.
-			//
-			// TODO: try to simulate a scenario where we can see this failing.
-			// deadline := time.Now().Add(*timeout)
-			// err = pc.SetWriteDeadline(deadline)
-			// if err != nil {
-			// 	doneChan <- err
-			// 	return
-			// }
-
-			// Write the packet's contents back to the client.
-			// n, err = pc.WriteTo(buffer[:n], addr)
-			// if err != nil {
-			// 	doneChan <- err
-			// 	return
-			// }
-
-			// fmt.Printf("packet-written: bytes=%d to=%s\n", n, addr.String())
 		}
 	}()
 
